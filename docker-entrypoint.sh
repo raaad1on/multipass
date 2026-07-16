@@ -24,15 +24,11 @@ prepare_sock_dir() {
   chmod "$SOCK_DIR_MODE" "$dir"
 }
 
-# Remove broken leftovers only. Never unlink a live socket while Xray is listening.
+# Always remove previous sock/lock so Xray can bind after a crash/reload.
+# Safe when multipass starts before Remnawave; remnanode entrypoint also cleans on its start.
 clear_stale_sock() {
   path="$1"
-  if [ -e "$path" ] && [ ! -S "$path" ]; then
-    rm -f "$path"
-  fi
-  if [ -e "${path}.lock" ] && [ ! -S "$path" ]; then
-    rm -f "${path}.lock"
-  fi
+  rm -f "$path" "${path}.lock"
 }
 
 prepare_sock_dir "$(dirname "$XHTTP_SOCK_PATH")"
