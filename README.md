@@ -37,54 +37,46 @@ Wildcard-сертификат на зону покрывает любые так
 
 ## Быстрый старт
 
-1. Подставьте свой хост ноды в `docker-compose.yml`:
+### Prerequisites
 
-```yaml
-environment:
-  NODE_HOST: de02.example.com
-```
+- Docker + Docker Compose
+- Remnawave/Xray поднимать **после** multipass
 
-2. **Сначала** запустите multipass (создаёт `/dev/shm/nginx` и чистит старые `*.sock` / `*.sock.lock`), **потом** Remnawave/Xray:
+### Deploy
 
 ```bash
+mkdir -p /opt/multipass && cd /opt/multipass
+
+curl -fsSL -o docker-compose.yml \
+  https://raw.githubusercontent.com/raaad1on/multipass/main/docker-compose.yml.dist
+
+# edit NODE_HOST=example.com to your FQDN (e.g. de02.example.com)
+nano docker-compose.yml
+
 docker compose pull
 docker compose up -d
+```
+
+Конфиг HAProxy уже внутри образа. Нужны только compose и `NODE_HOST`.
+
+Затем перезапустите ноду Xray (чтобы она увидела `/dev/shm/nginx`):
+
+```bash
+docker restart remnanode
+```
+
+### Проверка
+
+```bash
 docker compose logs -f
-```
+ls -la /dev/shm/nginx/
 
-Если Remnawave уже запущен и падает на сокетах — перезапустите его после multipass:
-
-```bash
-docker compose up -d          # multipass
-docker restart remnanode      # или ваш контейнер Xray
-```
-
-Вручную на хосте (если нужно до всего):
-
-```bash
-mkdir -p /dev/shm/nginx
-chmod 755 /dev/shm/nginx
-```
-
-Или одной командой без compose:
-
-```bash
-docker run -d --name multipass --network host --restart unless-stopped \
-  -v /dev/shm/nginx:/dev/shm/nginx \
-  --ulimit nofile=200000:200000 \
-  -e NODE_HOST=de02.example.com \
-  ghcr.io/raaad1on/multipass:latest
-```
-
-> Первый pull из GHCR для публичного пакета обычно работает без логина. Если GitHub потребует auth: `echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin`.
-
-Проверка SNI (с сервера):
-
-```bash
 echo | openssl s_client -connect 127.0.0.1:443 -servername xhttp-de02.example.com -brief
 echo | openssl s_client -connect 127.0.0.1:443 -servername grpc-de02.example.com -brief
 echo | openssl s_client -connect 127.0.0.1:443 -servername de02.example.com -brief
 ```
+
+> Первый pull из GHCR для публичного пакета обычно работает без логина. Если GitHub потребует auth: `echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin`.
 
 ## Переменные окружения
 
@@ -112,6 +104,8 @@ HAProxy подключается к:
 
 Ошибка вида `open .../reality.sock.lock: no such file or directory` значит, что каталог ещё не создан — поднимите multipass раньше Xray.
 
+Ошибка `address already in use` на сокете — осиротевший файл после reload; перед стартом Xray удалите `*.sock` / `*.lock` (или используйте обёртку бинаря, которая чистит сокеты).
+
 ## CI/CD
 
 При пуше в `main` GitHub Actions собирает multi-arch образ (`linux/amd64`, `linux/arm64`) и публикует в GHCR:
@@ -119,8 +113,6 @@ HAProxy подключается к:
 - `ghcr.io/raaad1on/multipass:latest`
 - `ghcr.io/raaad1on/multipass:<git-sha>`
 - при теге `vX.Y.Z` — semver-теги
-
-Workflow: [`.github/workflows/docker.yml`](.github/workflows/docker.yml)
 
 Локальная сборка:
 
@@ -130,18 +122,17 @@ docker build -t multipass:local .
 
 ## Важно
 
-- Стартуйте **multipass → затем Remnawave/Xray**, иначе Xray не сможет создать `*.sock.lock`.
-- Каталог `/dev/shm/nginx` монтируется в контейнер; entrypoint делает `mkdir -p` и чистит stale sockets.
+- Стартуйте **multipass → затем Remnawave/Xray**.
 - TLS не терминируется в HAProxy (включая gRPC) — только passthrough.
 - PROXY protocol не используется.
-- `ulimit nofile` для контейнера: `200000`.
+- `ulimit nofile` для контейнера: `1048576`.
 
 ## Состав репозитория
 
 | Файл | Описание |
 |------|----------|
 | `Dockerfile` | Образ на базе `haproxy:3.0-alpine` |
-| `docker-compose.yml` | Пример деплоя с `ghcr.io/raaad1on/multipass` |
+| `docker-compose.yml.dist` | Шаблон для деплоя (`curl` → `docker-compose.yml`) |
 | `haproxy.cfg` | Шаблон конфига (подстановка env при старте) |
 | `docker-entrypoint.sh` | Сборка SNI + рендер конфига + запуск HAProxy |
 | `.github/workflows/docker.yml` | CI/CD сборки и публикации образа |
