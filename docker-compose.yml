@@ -20,15 +20,15 @@ services:
     volumes:
       - /dev/shm/nginx:/dev/shm/nginx
     environment:
-      NODE_HOST: de02.example.com
+      NODE_HOST: de.example.com
       LISTEN_PORT: "443"
       # Optional overrides (defaults: xhttp-${NODE_HOST}, grpc-${NODE_HOST}):
-      # XHTTP_SNI: xhttp-de02.example.com
-      # GRPC_SNI: grpc-de02.example.com
+      # XHTTP_SNI: xhttp-de.example.com
+      # GRPC_SNI: grpc-de.example.com
       XHTTP_SOCK_PATH: /dev/shm/nginx/xhttp.sock
       GRPC_SOCK_PATH: /dev/shm/nginx/grpc.sock
       REALITY_SOCK_PATH: /dev/shm/nginx/reality.sock
     ulimits:
       nofile:
-        soft: 200000
-        hard: 200000
+        soft: 1048576
+        hard: 1048576
