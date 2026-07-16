@@ -7,6 +7,8 @@
 #   grpc-${NODE_HOST}  -> grpc.sock
 #   *                  -> reality.sock
 #
+# On start: mkdir /dev/shm/nginx, clear stale *.sock / *.sock.lock.
+# Start multipass BEFORE Remnawave/Xray so the directory exists for listen.
 # Docs: README.md
 
 services:

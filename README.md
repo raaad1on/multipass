@@ -44,12 +44,26 @@ environment:
   NODE_HOST: de02.example.com
 ```
 
-2. Запуск:
+2. **Сначала** запустите multipass (создаёт `/dev/shm/nginx` и чистит старые `*.sock` / `*.sock.lock`), **потом** Remnawave/Xray:
 
 ```bash
 docker compose pull
 docker compose up -d
 docker compose logs -f
+```
+
+Если Remnawave уже запущен и падает на сокетах — перезапустите его после multipass:
+
+```bash
+docker compose up -d          # multipass
+docker restart remnanode      # или ваш контейнер Xray
+```
+
+Вручную на хосте (если нужно до всего):
+
+```bash
+mkdir -p /dev/shm/nginx
+chmod 755 /dev/shm/nginx
 ```
 
 Или одной командой без compose:
@@ -83,14 +97,20 @@ echo | openssl s_client -connect 127.0.0.1:443 -servername de02.example.com -bri
 | `XHTTP_SOCK_PATH` | `/dev/shm/nginx/xhttp.sock` | Unix-сокет xHTTP |
 | `GRPC_SOCK_PATH` | `/dev/shm/nginx/grpc.sock` | Unix-сокет gRPC |
 | `REALITY_SOCK_PATH` | `/dev/shm/nginx/reality.sock` | Unix-сокет Reality / Vision |
+| `SOCK_DIR_MODE` | `755` | Права на каталог сокетов |
 
 ## Контракт inbound'ов (Remnawave / Xray)
 
-HAProxy подключается к Unix-сокетам:
+Xray **сам** слушает Unix-сокеты и создаёт `*.sock` + `*.sock.lock`.  
+multipass готовит каталог `/dev/shm/nginx` и убирает устаревшие файлы после крэша.
+
+HAProxy подключается к:
 
 - `reality.sock` — RAW + Reality (+ Vision) / fallback
 - `xhttp.sock` — xHTTP + Reality
 - `grpc.sock` — gRPC + TLS (`alpn`: `h2` первым), wildcard-сертификат на зону
+
+Ошибка вида `open .../reality.sock.lock: no such file or directory` значит, что каталог ещё не создан — поднимите multipass раньше Xray.
 
 ## CI/CD
 
@@ -110,7 +130,8 @@ docker build -t multipass:local .
 
 ## Важно
 
-- Каталог `/dev/shm/nginx` монтируется в контейнер; entrypoint делает `mkdir -p` при старте.
+- Стартуйте **multipass → затем Remnawave/Xray**, иначе Xray не сможет создать `*.sock.lock`.
+- Каталог `/dev/shm/nginx` монтируется в контейнер; entrypoint делает `mkdir -p` и чистит stale sockets.
 - TLS не терминируется в HAProxy (включая gRPC) — только passthrough.
 - PROXY protocol не используется.
 - `ulimit nofile` для контейнера: `200000`.
