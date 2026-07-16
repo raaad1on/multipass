@@ -1,12 +1,11 @@
-# multipass — HAProxy L4 SNI router + Unix socket bridges to Xray TCP
-#
-# multipass CREATES and LISTENS on Unix sockets, then socat-forwards to Xray.
-# Xray/Remnawave must listen on TCP upstreams (not on the sockets).
+# multipass — HAProxy L4 SNI router
+# Image embeds haproxy.cfg template + entrypoint.
+# Override NODE_HOST (and optional SNI/socket paths) via environment.
 #
 # Routing (TCP passthrough, no TLS termination):
-#   xhttp-${NODE_HOST} -> xhttp.sock  -> XHTTP_UPSTREAM
-#   grpc-${NODE_HOST}  -> grpc.sock   -> GRPC_UPSTREAM
-#   *                  -> reality.sock -> REALITY_UPSTREAM
+#   xhttp-${NODE_HOST} -> xhttp.sock
+#   grpc-${NODE_HOST}  -> grpc.sock
+#   *                  -> reality.sock
 #
 # Docs: README.md
 
@@ -21,16 +20,12 @@ services:
     environment:
       NODE_HOST: de02.example.com
       LISTEN_PORT: "443"
-      # Optional SNI overrides (defaults: xhttp-${NODE_HOST}, grpc-${NODE_HOST}):
+      # Optional overrides (defaults: xhttp-${NODE_HOST}, grpc-${NODE_HOST}):
       # XHTTP_SNI: xhttp-de02.example.com
       # GRPC_SNI: grpc-de02.example.com
       XHTTP_SOCK_PATH: /dev/shm/nginx/xhttp.sock
       GRPC_SOCK_PATH: /dev/shm/nginx/grpc.sock
       REALITY_SOCK_PATH: /dev/shm/nginx/reality.sock
-      # Xray TCP listeners (Remnawave inbounds):
-      REALITY_UPSTREAM: 127.0.0.1:10443
-      XHTTP_UPSTREAM: 127.0.0.1:10444
-      GRPC_UPSTREAM: 127.0.0.1:10445
     ulimits:
       nofile:
         soft: 200000
