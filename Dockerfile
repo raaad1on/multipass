@@ -3,6 +3,8 @@ FROM haproxy:3.0-alpine
 # Edge proxy binds :443 on host network; run as root for privileged ports.
 USER root
 
+RUN apk add --no-cache socat
+
 COPY haproxy.cfg /usr/local/etc/haproxy/haproxy.cfg.template
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 
