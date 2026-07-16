@@ -1,0 +1,11 @@
+# multipass — ignore local noise
+.DS_Store
+*.swp
+*~
+.env
+.env.*
+!.env.example
+
+# Local build / render artifacts
+haproxy.cfg.rendered
+/tmp/

@@ -1,0 +1,33 @@
+# multipass — HAProxy L4 SNI router
+# Image embeds haproxy.cfg template + entrypoint.
+# Override NODE_HOST (and optional SNI/socket paths) via environment.
+#
+# Routing (TCP passthrough, no TLS termination):
+#   xhttp-${NODE_HOST} -> xhttp.sock
+#   grpc-${NODE_HOST}  -> grpc.sock
+#   *                  -> reality.sock
+#
+# Sockets are created by Xray/Remnawave; multipass only connects.
+# Docs: README.md
+
+services:
+  multipass:
+    image: ghcr.io/raaad1on/multipass:latest
+    container_name: multipass
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /dev/shm/nginx:/dev/shm/nginx
+    environment:
+      NODE_HOST: de02.example.com
+      LISTEN_PORT: "443"
+      # Optional overrides (defaults: xhttp-${NODE_HOST}, grpc-${NODE_HOST}):
+      # XHTTP_SNI: xhttp-de02.example.com
+      # GRPC_SNI: grpc-de02.example.com
+      XHTTP_SOCK_PATH: /dev/shm/nginx/xhttp.sock
+      GRPC_SOCK_PATH: /dev/shm/nginx/grpc.sock
+      REALITY_SOCK_PATH: /dev/shm/nginx/reality.sock
+    ulimits:
+      nofile:
+        soft: 200000
+        hard: 200000
