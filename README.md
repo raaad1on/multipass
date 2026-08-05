@@ -1,79 +1,63 @@
-# multipass
+# multipass (redirect)
 
-L4 SNI-роутер на **HAProxy** для ноды с **Remnawave / Xray**.
+L4 SNI-роутер на **HAProxy**: один публичный `:443/tcp`, без TLS-терминации. По SNI трафик уходит на **внешний IP:port** (не на Unix-сокеты).
 
-Один публичный вход `:443/tcp`, без TLS-терминации: по SNI трафик уходит на Unix-сокеты.
+**Образ:** [`ghcr.io/raaad1on/multipass:redirect`](https://github.com/raaad1on/multipass/pkgs/container/multipass)
 
-**Образ:** [`ghcr.io/raaad1on/multipass`](https://github.com/raaad1on/multipass/pkgs/container/multipass)
+> Ветка `redirect`. Классический режим с UDS для Remnawave/Xray — в `main` (`:latest`).
 
 ## Роутинг
 
-| SNI | Backend | Транспорт |
-|-----|---------|-----------|
-| `xhttp-${NODE_HOST}` | `/dev/shm/nginx/xhttp.sock` | xHTTP + Reality |
-| `grpc-${NODE_HOST}` | `/dev/shm/nginx/grpc.sock` | gRPC + TLS |
-| всё остальное | `/dev/shm/nginx/reality.sock` | RAW + Reality (+ Vision) / заглушка |
+В `ROUTES` задаются зоны (`*.zone`) и при необходимости точные SNI.  
+Для каждой зоны правило `xhttp-*` создаётся автоматически на тот же IP и `XHTTP_PORT` (по умолчанию `8443`).
+
+| SNI | Backend |
+|-----|---------|
+| `xhttp-*.example.com` | `<ip>:XHTTP_PORT` (авто из зоны) |
+| `special.example.com` | exact host из `ROUTES` (без авто-xhttp) |
+| `*.example.com` | `<ip>:<port>` из `ROUTES` |
+| неизвестный SNI | reject |
+
+Порядок матча: `xhttp-*` → exact → `*.zone`.
 
 ```text
 Client ──► multipass (HAProxy) :443
-              ├─ xhttp-de02.example.com ──► xhttp.sock
-              ├─ grpc-de02.example.com  ──► grpc.sock
-              └─ *                        ──► reality.sock
+              ├─ xhttp-de.example.com     ──► 1.1.1.1:8443
+              ├─ special.example.com      ──► 2.2.2.2:443
+              ├─ de.example.com           ──► 1.1.1.1:443
+              └─ unknown                  ──► reject
 ```
 
-## Имена хостов
+Пример `ROUTES`:
 
-`NODE_HOST` — третий уровень домена:
-
-- `de.example.com` — код локации
-- `de02.example.com` — код локации + номер
-
-Транспортные SNI собираются автоматически:
-
-- `xhttp-${NODE_HOST}` → `xhttp-de02.example.com`
-- `grpc-${NODE_HOST}` → `grpc-de02.example.com`
-
-Wildcard-сертификат на зону покрывает любые такие имена (нужен для gRPC + TLS).
+```text
+special.example.com=2.2.2.2:443
+*.example.com=1.1.1.1:443
+*.example2.com=3.3.3.3:443
+```
 
 ## Быстрый старт
-
-### Prerequisites
-
-- Docker + Docker Compose
-- Remnawave/Xray поднимать **после** multipass
-
-### Deploy
 
 ```bash
 mkdir -p /opt/multipass && cd /opt/multipass
 
 curl -fsSL -o docker-compose.yml \
-  https://raw.githubusercontent.com/raaad1on/multipass/main/docker-compose.yml.dist
+  https://raw.githubusercontent.com/raaad1on/multipass/redirect/docker-compose.yml.dist
 
-# edit NODE_HOST=example.com to your FQDN (e.g. de02.example.com)
+# edit ROUTES
 nano docker-compose.yml
 
 docker compose pull
 docker compose up -d
 ```
 
-Конфиг HAProxy уже внутри образа. Нужны только compose и `NODE_HOST`.
-
-Затем перезапустите ноду Xray (чтобы она увидела `/dev/shm/nginx`):
-
-```bash
-docker restart remnanode
-```
-
 ### Проверка
 
 ```bash
 docker compose logs -f
-ls -la /dev/shm/nginx/
 
-echo | openssl s_client -connect 127.0.0.1:443 -servername xhttp-de02.example.com -brief
-echo | openssl s_client -connect 127.0.0.1:443 -servername grpc-de02.example.com -brief
-echo | openssl s_client -connect 127.0.0.1:443 -servername de02.example.com -brief
+echo | openssl s_client -connect 127.0.0.1:443 -servername xhttp-de.example.com -brief
+echo | openssl s_client -connect 127.0.0.1:443 -servername de.example.com -brief
 ```
 
 > Первый pull из GHCR для публичного пакета обычно работает без логина. Если GitHub потребует auth: `echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin`.
@@ -82,49 +66,30 @@ echo | openssl s_client -connect 127.0.0.1:443 -servername de02.example.com -bri
 
 | Переменная | По умолчанию | Описание |
 |------------|--------------|----------|
-| `NODE_HOST` | *обязательно* | Хост ноды (`de.example.com` / `de02.example.com`) |
+| `ROUTES` | *обязательно* | `*.zone.tld=host:port` и/или `exact.host=host:port` (строки или `;`) |
 | `LISTEN_PORT` | `443` | Порт bind HAProxy |
-| `XHTTP_SNI` | `xhttp-${NODE_HOST}` | SNI для xHTTP |
-| `GRPC_SNI` | `grpc-${NODE_HOST}` | SNI для gRPC |
-| `XHTTP_SOCK_PATH` | `/dev/shm/nginx/xhttp.sock` | Unix-сокет xHTTP |
-| `GRPC_SOCK_PATH` | `/dev/shm/nginx/grpc.sock` | Unix-сокет gRPC |
-| `REALITY_SOCK_PATH` | `/dev/shm/nginx/reality.sock` | Unix-сокет Reality / Vision |
-| `SOCK_DIR_MODE` | `755` | Права на каталог сокетов |
-
-## Контракт inbound'ов (Remnawave / Xray)
-
-Xray **сам** слушает Unix-сокеты и создаёт `*.sock` + `*.sock.lock`.  
-multipass готовит каталог `/dev/shm/nginx` и убирает устаревшие файлы после крэша.
-
-HAProxy подключается к:
-
-- `reality.sock` — RAW + Reality (+ Vision) / fallback
-- `xhttp.sock` — xHTTP + Reality
-- `grpc.sock` — gRPC + TLS (`alpn`: `h2` первым), wildcard-сертификат на зону
-
-Ошибка вида `open .../reality.sock.lock: no such file or directory` значит, что каталог ещё не создан — поднимите multipass раньше Xray.
-
-Ошибка `address already in use` на сокете — осиротевший файл после reload; перед стартом Xray удалите `*.sock` / `*.lock` (или используйте обёртку бинаря, которая чистит сокеты).
+| `XHTTP_PORT` | `8443` | Порт для авто-правил `xhttp-*.zone` (тот же host) |
 
 ## CI/CD
 
-При пуше в `main` GitHub Actions собирает multi-arch образ (`linux/amd64`, `linux/arm64`) и публикует в GHCR:
+Пуш в `redirect` публикует:
 
-- `ghcr.io/raaad1on/multipass:latest`
+- `ghcr.io/raaad1on/multipass:redirect`
 - `ghcr.io/raaad1on/multipass:<git-sha>`
-- при теге `vX.Y.Z` — semver-теги
+
+Пуш в `main` по-прежнему даёт `:latest` (UDS-режим).
 
 Локальная сборка:
 
 ```bash
-docker build -t multipass:local .
+docker build -t multipass:redirect .
 ```
 
 ## Важно
 
-- Стартуйте **multipass → затем Remnawave/Xray**.
-- TLS не терминируется в HAProxy (включая gRPC) — только passthrough.
+- TLS не терминируется — только TCP passthrough по SNI.
 - PROXY protocol не используется.
+- Неизвестный SNI отклоняется (не открытый прокси).
 - `ulimit nofile` для контейнера: `1048576`.
 
 ## Состав репозитория
@@ -132,7 +97,6 @@ docker build -t multipass:local .
 | Файл | Описание |
 |------|----------|
 | `Dockerfile` | Образ на базе `haproxy:3.0-alpine` |
-| `docker-compose.yml.dist` | Шаблон для деплоя (`curl` → `docker-compose.yml`) |
-| `haproxy.cfg` | Шаблон конфига (подстановка env при старте) |
-| `docker-entrypoint.sh` | Сборка SNI + рендер конфига + запуск HAProxy |
+| `docker-compose.yml.dist` | Шаблон для деплоя |
+| `docker-entrypoint.sh` | Парсинг `ROUTES` + генерация HAProxy cfg + запуск |
 | `.github/workflows/docker.yml` | CI/CD сборки и публикации образа |

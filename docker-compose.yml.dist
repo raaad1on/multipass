@@ -1,30 +1,22 @@
-# multipass — HAProxy L4 SNI router
-# Config is baked into the image. You only need this compose + NODE_HOST.
+# multipass (redirect) — HAProxy L4 SNI → external IP:port
+# TCP passthrough, no TLS termination.
 #
-# Routing (TCP passthrough, no TLS termination):
-#   xhttp-${NODE_HOST} -> xhttp.sock
-#   grpc-${NODE_HOST}  -> grpc.sock
-#   *                  -> reality.sock
-#
-# Start multipass BEFORE Remnawave/Xray so /dev/shm/nginx exists.
+# ROUTES:
+#   *.zone=IP:port          → zone + auto xhttp-*.zone → IP:XHTTP_PORT (default 8443)
+#   exact.host=IP:port      → exact SNI only (checked before *.zone)
 
 services:
   multipass:
-    image: ghcr.io/raaad1on/multipass:latest
+    image: ghcr.io/raaad1on/multipass:redirect
     container_name: multipass
     restart: unless-stopped
     network_mode: host
-    volumes:
-      - /dev/shm/nginx:/dev/shm/nginx
     environment:
-      NODE_HOST: example.com
       LISTEN_PORT: "443"
-      # Optional overrides (defaults: xhttp-${NODE_HOST}, grpc-${NODE_HOST}):
-      # XHTTP_SNI: xhttp-example.com
-      # GRPC_SNI: grpc-example.com
-      XHTTP_SOCK_PATH: /dev/shm/nginx/xhttp.sock
-      GRPC_SOCK_PATH: /dev/shm/nginx/grpc.sock
-      REALITY_SOCK_PATH: /dev/shm/nginx/reality.sock
+      XHTTP_PORT: "8443"
+      ROUTES: |
+        special.example.com=2.2.2.2:443
+        *.example.com=1.1.1.1:443
     ulimits:
       nofile:
         soft: 1048576

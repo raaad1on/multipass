@@ -2,10 +2,10 @@ name: Build and publish
 
 on:
   push:
-    branches: [main]
+    branches: [main, redirect]
     tags: ["v*"]
   pull_request:
-    branches: [main]
+    branches: [main, redirect]
   workflow_dispatch:
 
 permissions:
@@ -44,6 +44,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=redirect,enable=${{ github.ref == 'refs/heads/redirect' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=
