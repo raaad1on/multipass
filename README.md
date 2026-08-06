@@ -90,6 +90,7 @@ docker build -t multipass:redirect .
 - TLS не терминируется — только TCP passthrough по SNI.
 - PROXY protocol не используется.
 - Неизвестный SNI отклоняется (не открытый прокси).
+- Логи: без per-connection tcplog; Docker `max-size: 10m`.
 - `ulimit nofile` для контейнера: `1048576`.
 
 ## Состав репозитория

@@ -117,7 +117,8 @@ fi
 # Zone routes auto-add xhttp-* → IP:${XHTTP_PORT}. Exact SNI has no auto xhttp.
 
 global
-    log stdout format raw local0
+    # warning+: no per-connection tcplog (keeps docker logs small)
+    log stdout format raw local0 warning
     maxconn 200000
     # nbthread omitted: HAProxy auto-sets threads to available CPUs.
     tune.bufsize 32768
@@ -127,7 +128,6 @@ defaults
     mode tcp
     log global
     option dontlognull
-    option tcplog
     timeout connect 5s
     timeout client  300s
     timeout server  300s

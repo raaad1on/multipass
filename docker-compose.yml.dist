@@ -17,6 +17,11 @@ services:
       ROUTES: |
         special.example.com=2.2.2.2:443
         *.example.com=1.1.1.1:443
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "1"
     ulimits:
       nofile:
         soft: 1048576
