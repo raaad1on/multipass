@@ -25,6 +25,11 @@ services:
       XHTTP_SOCK_PATH: /dev/shm/nginx/xhttp.sock
       GRPC_SOCK_PATH: /dev/shm/nginx/grpc.sock
       REALITY_SOCK_PATH: /dev/shm/nginx/reality.sock
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "1"
     ulimits:
       nofile:
         soft: 1048576
