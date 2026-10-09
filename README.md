@@ -124,7 +124,7 @@ docker build -t multipass:local .
 
 - Стартуйте **multipass → затем Remnawave/Xray**.
 - TLS не терминируется в HAProxy (включая gRPC) — только passthrough.
-- PROXY protocol не используется.
+- К Xray уходит PROXY protocol v2, иначе у Unix-сокета нет адреса клиента и панель показывает 0.0.0.0.
 - Логи: без per-connection tcplog; Docker `max-size: 10m`.
 - `ulimit nofile` для контейнера: `1048576`.
 
