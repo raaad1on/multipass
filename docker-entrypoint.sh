@@ -128,6 +128,8 @@ defaults
     mode tcp
     log global
     option dontlognull
+    # Kernel TCP splice when both ends are TCP (no-op for UDS).
+    option splice-auto
     timeout connect 5s
     timeout client  300s
     timeout server  300s
